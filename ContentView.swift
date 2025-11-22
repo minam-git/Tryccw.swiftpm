@@ -40,6 +40,10 @@ struct ContentView: View {
         // 現在の数字があれば履歴に追加
         if let current = currentNumber {
             history.append(current)
+            // 履歴は最大4つまで
+            if history.count > 4 {
+                history.removeFirst()
+            }
         }
         // 新しい数字を生成
         currentNumber = Int.random(in: 1...6)
