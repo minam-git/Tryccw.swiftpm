@@ -2,11 +2,15 @@ import SwiftUI
 
 struct ContentView: View {
     // 3つのダイスの状態
-    @State private var diceNumbers: [Int] = [1, 1, 1]
+    @State private var scrollOffsets: [CGFloat] = [0, 0, 0]
     @State private var isSpinning: [Bool] = [false, false, false]
     @State private var isStopping: [Bool] = [false, false, false]
     @State private var spinTimers: [Timer?] = [nil, nil, nil]
     @State private var hasStarted = false
+    @State private var spinSpeeds: [CGFloat] = [0, 0, 0]
+
+    private let itemHeight: CGFloat = 50
+    private let visibleItems = 5
 
     var body: some View {
         VStack {
@@ -17,28 +21,9 @@ struct ContentView: View {
                 ForEach(0..<3, id: \.self) { index in
                     VStack {
                         // スロットマシン風の数字表示
-                        if hasStarted {
-                            slotView(for: index)
-                        } else {
-                            // 開始前のプレースホルダー
-                            VStack(spacing: 4) {
-                                Text("-")
-                                    .font(.system(size: 28, weight: .medium))
-                                    .opacity(0.2)
-                                Text("-")
-                                    .font(.system(size: 36, weight: .medium))
-                                    .opacity(0.4)
-                                Text("-")
-                                    .font(.system(size: 56, weight: .bold))
-                                Text("-")
-                                    .font(.system(size: 36, weight: .medium))
-                                    .opacity(0.4)
-                                Text("-")
-                                    .font(.system(size: 28, weight: .medium))
-                                    .opacity(0.2)
-                            }
-                            .frame(width: 80, height: 220)
-                        }
+                        slotReelView(for: index)
+                            .frame(width: 80, height: CGFloat(visibleItems) * itemHeight)
+                            .clipped()
 
                         // 各ダイスのストップボタン
                         Button("ストップ") {
@@ -63,37 +48,45 @@ struct ContentView: View {
         }
     }
 
-    // スロットマシン風の表示
+    // スロットリールの表示
     @ViewBuilder
-    private func slotView(for index: Int) -> some View {
-        let number = diceNumbers[index]
-        VStack(spacing: 4) {
-            // 上2つ目
-            Text("\(wrapNumber(number - 2))")
-                .font(.system(size: 28, weight: .medium))
-                .opacity(0.2)
+    private func slotReelView(for index: Int) -> some View {
+        let offset = scrollOffsets[index]
 
-            // 上1つ目
-            Text("\(wrapNumber(number - 1))")
-                .font(.system(size: 36, weight: .medium))
-                .opacity(0.4)
+        GeometryReader { geometry in
+            let centerY = geometry.size.height / 2
 
-            // 中央（現在の数字）
-            Text("\(number)")
-                .font(.system(size: 56, weight: .bold))
-                .foregroundStyle(.primary)
+            ZStack {
+                // 十分な数の数字を表示（上下にバッファ）
+                ForEach(-10..<10, id: \.self) { i in
+                    let number = wrapNumber(Int(offset / itemHeight) + i + 1)
+                    let baseY = CGFloat(i) * itemHeight - offset.truncatingRemainder(dividingBy: itemHeight)
+                    let itemCenterY = baseY + itemHeight / 2
+                    let distanceFromCenter = abs(itemCenterY - centerY)
+                    let maxDistance = centerY + itemHeight
 
-            // 下1つ目
-            Text("\(wrapNumber(number + 1))")
-                .font(.system(size: 36, weight: .medium))
-                .opacity(0.4)
+                    // 中央からの距離に応じてスケールと透明度を調整
+                    let scale = max(0.5, 1.0 - (distanceFromCenter / maxDistance) * 0.5)
+                    let opacity = max(0.1, 1.0 - (distanceFromCenter / maxDistance) * 0.9)
 
-            // 下2つ目
-            Text("\(wrapNumber(number + 2))")
-                .font(.system(size: 28, weight: .medium))
-                .opacity(0.2)
+                    Text("\(number)")
+                        .font(.system(size: 44, weight: distanceFromCenter < itemHeight / 2 ? .bold : .medium))
+                        .scaleEffect(scale)
+                        .opacity(hasStarted ? opacity : 0.3)
+                        .position(x: geometry.size.width / 2, y: baseY + itemHeight / 2)
+                }
+            }
         }
-        .frame(width: 80, height: 220)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.gray.opacity(0.1))
+        )
+        .overlay(
+            // 中央のハイライト
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.blue.opacity(0.3), lineWidth: 2)
+                .frame(height: itemHeight)
+        )
     }
 
     // 1-6で循環させる
@@ -111,11 +104,12 @@ struct ContentView: View {
 
         for i in 0..<3 {
             isSpinning[i] = true
-            diceNumbers[i] = Int.random(in: 1...6)
+            // 各リールに少し異なる速度を設定
+            spinSpeeds[i] = CGFloat.random(in: 15...20)
 
-            // 高速で数字を変更
-            spinTimers[i] = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { _ in
-                diceNumbers[i] = Int.random(in: 1...6)
+            // 滑らかにスクロール
+            spinTimers[i] = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { _ in
+                scrollOffsets[i] += spinSpeeds[i]
             }
         }
     }
@@ -123,24 +117,37 @@ struct ContentView: View {
     // 個別のダイスを停止
     private func stopDice(_ index: Int) {
         isStopping[index] = true
-        spinTimers[index]?.invalidate()
 
-        // 徐々に遅くなりながら停止
-        let delays: [Double] = [0.1, 0.15, 0.2, 0.3, 0.4, 0.5]
-        var totalDelay = 0.0
+        // 徐々に減速
+        let decelerationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { timer in
+            spinSpeeds[index] *= 0.97
 
-        for delay in delays {
-            totalDelay += delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay) {
-                diceNumbers[index] = Int.random(in: 1...6)
+            scrollOffsets[index] += spinSpeeds[index]
+
+            // 十分に遅くなったら停止
+            if spinSpeeds[index] < 0.5 {
+                timer.invalidate()
+                spinTimers[index]?.invalidate()
+
+                // 最も近い数字にスナップ
+                let targetOffset = round(scrollOffsets[index] / itemHeight) * itemHeight
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    scrollOffsets[index] = targetOffset
+                }
+
+                isSpinning[index] = false
+                isStopping[index] = false
             }
         }
 
-        // 最終停止
-        DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay + 0.3) {
-            isSpinning[index] = false
-            isStopping[index] = false
-        }
+        // 元のタイマーを停止
+        spinTimers[index]?.invalidate()
+        spinTimers[index] = decelerationTimer
+    }
+
+    // 現在の数字を取得
+    private func currentNumber(for index: Int) -> Int {
+        return wrapNumber(Int(round(scrollOffsets[index] / itemHeight)) + 1)
     }
 }
 
