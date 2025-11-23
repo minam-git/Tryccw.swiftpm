@@ -8,9 +8,11 @@ struct ContentView: View {
     @State private var spinTimers: [Timer?] = [nil, nil, nil]
     @State private var hasStarted = false
     @State private var spinSpeeds: [CGFloat] = [0, 0, 0]
+    @State private var speedMultiplier: Double = 1.0
 
     private let itemHeight: CGFloat = 50
     private let visibleItems = 5
+    private let speedOptions: [Double] = [0.2, 0.4, 0.6, 0.8, 1.0]
 
     var body: some View {
         VStack {
@@ -43,6 +45,32 @@ struct ContentView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .disabled(isSpinning.contains(true))
+
+            // 速度調整スライダー
+            VStack(spacing: 8) {
+                Text("速度: \(Int(speedMultiplier * 100))%")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Text("20%")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    Slider(
+                        value: $speedMultiplier,
+                        in: 0.2...1.0,
+                        step: 0.2
+                    )
+                    .frame(width: 200)
+
+                    Text("100%")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.top, 16)
             .padding(.bottom, 40)
             .disabled(isSpinning.contains(true))
         }
@@ -104,8 +132,9 @@ struct ContentView: View {
 
         for i in 0..<3 {
             isSpinning[i] = true
-            // 各リールに少し異なる速度を設定
-            spinSpeeds[i] = CGFloat.random(in: 15...20)
+            // 各リールに少し異なる速度を設定（速度倍率を適用）
+            let baseSpeed = CGFloat.random(in: 15...20)
+            spinSpeeds[i] = baseSpeed * CGFloat(speedMultiplier)
 
             // 滑らかにスクロール
             spinTimers[i] = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { _ in
