@@ -267,17 +267,17 @@ struct ContentView: View {
         let stoppedIndices = (0..<3).filter { !isSpinning[$0] }
         let spinningIndices = (0..<3).filter { isSpinning[$0] }
 
-        // 停止したリールの数字を取得
-        let stoppedNumbers = stoppedIndices.map { currentNumber(for: $0) }
-
         // 全部停止した場合
         if stoppedIndices.count == 3 {
+            // リールの位置順（左から右: 0, 1, 2）で数字を取得
+            let orderedNumbers = [currentNumber(for: 0), currentNumber(for: 1), currentNumber(for: 2)]
+
             // ゾロ目判定
-            if stoppedNumbers[0] == stoppedNumbers[1] && stoppedNumbers[1] == stoppedNumbers[2] {
+            if orderedNumbers[0] == orderedNumbers[1] && orderedNumbers[1] == orderedNumbers[2] {
                 triggerJackpot()
             }
             // ストレート（連続）判定
-            else if isStraight(stoppedNumbers) {
+            else if isStraight(orderedNumbers) {
                 triggerJackpot()
             }
             isReach = false
@@ -285,8 +285,12 @@ struct ContentView: View {
         }
         // 2つ停止した場合
         else if stoppedIndices.count == 2 && spinningIndices.count == 1 {
+            // 停止したリールを位置順（左から右）にソート
+            let sortedStoppedIndices = stoppedIndices.sorted()
+            let orderedStoppedNumbers = sortedStoppedIndices.map { currentNumber(for: $0) }
+
             // リーチ判定（2つが同じ数字、または連続の可能性がある）
-            if stoppedNumbers[0] == stoppedNumbers[1] || canFormStraight(stoppedNumbers) {
+            if orderedStoppedNumbers[0] == orderedStoppedNumbers[1] || canFormStraight(sortedStoppedIndices, orderedStoppedNumbers) {
                 isReach = true
                 reachReelIndex = spinningIndices[0]
                 // 残りのリールを減速
@@ -314,23 +318,34 @@ struct ContentView: View {
     }
 
     // 2つの数字から連続が成立する可能性があるか判定
-    // 最初の2つ（左と中央）が連続していれば、3つ目で連続になる可能性あり
-    private func canFormStraight(_ numbers: [Int]) -> Bool {
-        guard numbers.count == 2 else { return false }
+    // indices: 停止したリールの位置（ソート済み）、numbers: その数字
+    private func canFormStraight(_ indices: [Int], _ numbers: [Int]) -> Bool {
+        guard indices.count == 2 && numbers.count == 2 else { return false }
 
-        let first = numbers[0]
-        let second = numbers[1]
+        let first = numbers[0]  // 左側のリールの数字
+        let second = numbers[1] // 右側のリールの数字
 
-        // 昇順の可能性: first, second, ? で連続になる場合
-        // first+1 == second なら、second+1 が来れば昇順連続
-        if second - first == 1 && second + 1 <= 6 {
-            return true
+        // 停止しているリールの位置パターンで判定
+        if indices == [0, 1] {
+            // 位置0,1が停止 → 位置2に来る数字で連続になるか
+            // 昇順: first, second, ? → second+1 が来れば連続
+            if second - first == 1 && second + 1 <= 6 { return true }
+            // 降順: first, second, ? → second-1 が来れば連続
+            if first - second == 1 && second - 1 >= 1 { return true }
         }
-
-        // 降順の可能性: first, second, ? で連続になる場合
-        // first-1 == second なら、second-1 が来れば降順連続
-        if first - second == 1 && second - 1 >= 1 {
-            return true
+        else if indices == [0, 2] {
+            // 位置0,2が停止 → 位置1に来る数字で連続になるか
+            // 昇順: first, ?, second → first+1 == second-1 なら連続可能
+            if second - first == 2 { return true }
+            // 降順: first, ?, second → first-1 == second+1 なら連続可能
+            if first - second == 2 { return true }
+        }
+        else if indices == [1, 2] {
+            // 位置1,2が停止 → 位置0に来る数字で連続になるか
+            // 昇順: ?, first, second → first-1 が来れば連続
+            if second - first == 1 && first - 1 >= 1 { return true }
+            // 降順: ?, first, second → first+1 が来れば連続
+            if first - second == 1 && first + 1 <= 6 { return true }
         }
 
         return false
