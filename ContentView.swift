@@ -149,7 +149,8 @@ struct ContentView: View {
         spinTimers[index]?.invalidate()
 
         let currentOffset = scrollOffsets[index]
-        let v0 = spinSpeeds[index] // 現在の速度
+        // spinSpeedsはフレームあたりのピクセル数なので、秒あたりに変換（60fps）
+        let v0 = spinSpeeds[index] * 60.0 // ピクセル/秒
 
         // 目標位置を決定（現在位置から1〜2周先）
         let extraItems = CGFloat(Int.random(in: 6...12))
