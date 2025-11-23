@@ -100,15 +100,15 @@ struct ContentView: View {
                             VStack(spacing: 8) {
                                 if winningLineCount >= 3 {
                                     Text("🌟 SUPER JACKPOT! 🌟")
-                                        .font(.system(size: 36, weight: .bold))
+                                        .font(.system(size: 26, weight: .bold))
                                         .foregroundStyle(.purple)
                                 } else if winningLineCount == 2 {
                                     Text("✨ BIG JACKPOT! ✨")
-                                        .font(.system(size: 36, weight: .bold))
+                                        .font(.system(size: 30, weight: .bold))
                                         .foregroundStyle(.red)
                                 } else {
                                     Text("🎉 JACKPOT! 🎉")
-                                        .font(.system(size: 36, weight: .bold))
+                                        .font(.system(size: 34, weight: .bold))
                                         .foregroundStyle(.orange)
                                 }
                                 Text("\(winningLineCount)ライン当たり!")
