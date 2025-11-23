@@ -31,6 +31,7 @@ struct ContentView: View {
     @State private var isJackpot = false
     @State private var isReach = false
     @State private var reachReelIndex: Int? = nil
+    @State private var reachLineIndices: [Int] = []  // リーチ中のライン番号
     @State private var confettiPieces: [ConfettiPiece] = []
     @State private var jackpotScale: CGFloat = 1.0
     @State private var jackpotOpacity: Double = 0.0
@@ -99,27 +100,35 @@ struct ContentView: View {
                 }
 
                 // 3つのダイスを横に並べる
-                HStack(spacing: 20) {
-                    ForEach(0..<3, id: \.self) { index in
-                        VStack {
-                            // スロットマシン風の数字表示
-                            slotReelView(for: index)
-                                .frame(width: 80, height: CGFloat(visibleItems) * itemHeight)
-                                .clipped()
-                                .overlay(
-                                    // リーチ時のハイライト
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.red, lineWidth: 3)
-                                        .opacity(isReach && reachReelIndex == index && isSpinning[index] ? 1 : 0)
-                                )
+                ZStack {
+                    HStack(spacing: 20) {
+                        ForEach(0..<3, id: \.self) { index in
+                            VStack {
+                                // スロットマシン風の数字表示
+                                slotReelView(for: index)
+                                    .frame(width: 80, height: CGFloat(visibleItems) * itemHeight)
+                                    .clipped()
+                                    .overlay(
+                                        // リーチ時のハイライト（回転中リール）
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.red, lineWidth: 3)
+                                            .opacity(isReach && reachReelIndex == index && isSpinning[index] ? 1 : 0)
+                                    )
 
-                            // 各ダイスのストップボタン
-                            Button("ストップ") {
-                                stopDice(index)
+                                // 各ダイスのストップボタン
+                                Button("ストップ") {
+                                    stopDice(index)
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(!isSpinning[index] || isStopping[index])
                             }
-                            .buttonStyle(.bordered)
-                            .disabled(!isSpinning[index] || isStopping[index])
                         }
+                    }
+
+                    // リーチ時のペイライン描画
+                    if isReach && !reachLineIndices.isEmpty {
+                        paylineOverlay()
+                            .allowsHitTesting(false)
                     }
                 }
 
@@ -180,6 +189,7 @@ struct ContentView: View {
 
         GeometryReader { geometry in
             let centerY = geometry.size.height / 2
+            let centerOffset = (visibleItems - 1) / 2  // = 2
 
             ZStack {
                 // 十分な数の数字を表示（上下にバッファ）
@@ -195,11 +205,27 @@ struct ContentView: View {
                     let scale = max(0.5, 1.0 - (distanceFromCenter / maxDistance) * 0.5)
                     let opacity = max(0.1, 1.0 - (distanceFromCenter / maxDistance) * 0.9)
 
-                    Text("\(number)")
-                        .font(.system(size: 44, weight: distanceFromCenter < itemHeight / 2 ? .bold : .medium))
-                        .scaleEffect(scale)
-                        .opacity(hasStarted ? opacity : 0.3)
-                        .position(x: geometry.size.width / 2, y: baseY + itemHeight / 2)
+                    // この行のrowOffset（中央が0、上が-1、下が+1）
+                    let rowOffset = i - centerOffset
+
+                    // リーチラインの一部ならハイライト
+                    let isReachCell = isPartOfReachLine(reelIndex: index, rowOffset: rowOffset)
+
+                    ZStack {
+                        // リーチセルの背景
+                        if isReachCell {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.red.opacity(0.3))
+                                .frame(width: 70, height: itemHeight - 4)
+                        }
+
+                        Text("\(number)")
+                            .font(.system(size: 44, weight: distanceFromCenter < itemHeight / 2 ? .bold : .medium))
+                            .foregroundStyle(isReachCell ? .red : .primary)
+                    }
+                    .scaleEffect(scale)
+                    .opacity(hasStarted ? opacity : 0.3)
+                    .position(x: geometry.size.width / 2, y: baseY + itemHeight / 2)
                 }
             }
         }
@@ -230,6 +256,7 @@ struct ContentView: View {
         isJackpot = false
         isReach = false
         reachReelIndex = nil
+        reachLineIndices = []
         confettiPieces = []
         jackpotOpacity = 0
 
@@ -331,21 +358,22 @@ struct ContentView: View {
 
             isReach = false
             reachReelIndex = nil
+            reachLineIndices = []
         }
         // 2つ停止した場合
         else if stoppedIndices.count == 2 && spinningIndices.count == 1 {
             // いずれかのラインでリーチの可能性があるかチェック
-            var hasReachPotential = false
-            for line in paylines {
+            var reachLines: [Int] = []
+            for (index, line) in paylines.enumerated() {
                 if checkLineReach(line, stoppedIndices: stoppedIndices) {
-                    hasReachPotential = true
-                    break
+                    reachLines.append(index)
                 }
             }
 
-            if hasReachPotential {
+            if !reachLines.isEmpty {
                 isReach = true
                 reachReelIndex = spinningIndices[0]
+                reachLineIndices = reachLines
                 slowDownReachReel(spinningIndices[0])
             }
         }
@@ -504,6 +532,60 @@ struct ContentView: View {
             getNumber(reelIndex: 1, rowOffset: line.1),
             getNumber(reelIndex: 2, rowOffset: line.2)
         ]
+    }
+
+    // 指定した(リール, 行オフセット)がリーチラインの一部かどうか
+    private func isPartOfReachLine(reelIndex: Int, rowOffset: Int) -> Bool {
+        guard isReach && !isSpinning[reelIndex] else { return false }
+        for lineIndex in reachLineIndices {
+            let line = paylines[lineIndex]
+            let offsets = [line.0, line.1, line.2]
+            if offsets[reelIndex] == rowOffset {
+                return true
+            }
+        }
+        return false
+    }
+
+    // ペイラインの色
+    private func colorForPayline(_ index: Int) -> Color {
+        let colors: [Color] = [.red, .blue, .green, .orange, .purple]
+        return colors[index % colors.count]
+    }
+
+    // ペイライン描画オーバーレイ
+    @ViewBuilder
+    private func paylineOverlay() -> some View {
+        let reelWidth: CGFloat = 80
+        let spacing: CGFloat = 20
+        let reelHeight = CGFloat(visibleItems) * itemHeight
+        let totalWidth = 3 * reelWidth + 2 * spacing
+
+        Canvas { context, size in
+            for lineIndex in reachLineIndices {
+                let line = paylines[lineIndex]
+                let offsets = [line.0, line.1, line.2]
+                let color = colorForPayline(lineIndex)
+
+                var path = Path()
+                for reelIndex in 0..<3 {
+                    // 各リールの中心X座標
+                    let reelCenterX = CGFloat(reelIndex) * (reelWidth + spacing) + reelWidth / 2
+                    // 各行のY座標（中央が reelHeight/2）
+                    let rowOffset = offsets[reelIndex]
+                    let y = reelHeight / 2 + CGFloat(rowOffset) * itemHeight
+
+                    if reelIndex == 0 {
+                        path.move(to: CGPoint(x: reelCenterX, y: y))
+                    } else {
+                        path.addLine(to: CGPoint(x: reelCenterX, y: y))
+                    }
+                }
+
+                context.stroke(path, with: .color(color), lineWidth: 3)
+            }
+        }
+        .frame(width: totalWidth, height: reelHeight)
     }
 }
 
