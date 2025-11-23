@@ -117,31 +117,39 @@ struct ContentView: View {
     // 個別のダイスを停止
     private func stopDice(_ index: Int) {
         isStopping[index] = true
+        spinTimers[index]?.invalidate()
 
-        // 徐々に減速
+        // 現在位置から目標位置を決定（1〜2周分先の位置）
+        let currentOffset = scrollOffsets[index]
+        let extraDistance = itemHeight * CGFloat(Int.random(in: 8...14)) // 追加で回る距離
+        let rawTarget = currentOffset + extraDistance
+        let targetOffset = round(rawTarget / itemHeight) * itemHeight // 数字の位置に合わせる
+
+        // アニメーションのパラメータ
+        let startOffset = currentOffset
+        let totalDistance = targetOffset - startOffset
+        let duration: Double = 2.0 // 停止までの時間（秒）
+        let startTime = Date()
+
+        // easeOutで滑らかに減速しながら目標位置へ
         let decelerationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { timer in
-            spinSpeeds[index] *= 0.97
+            let elapsed = Date().timeIntervalSince(startTime)
+            let progress = min(elapsed / duration, 1.0)
 
-            scrollOffsets[index] += spinSpeeds[index]
+            // easeOutCubic: 最初は速く、最後はゆっくり
+            let easedProgress = 1.0 - pow(1.0 - progress, 3)
 
-            // 十分に遅くなったら停止
-            if spinSpeeds[index] < 0.5 {
+            scrollOffsets[index] = startOffset + totalDistance * easedProgress
+
+            // アニメーション完了
+            if progress >= 1.0 {
                 timer.invalidate()
-                spinTimers[index]?.invalidate()
-
-                // 最も近い数字にスナップ
-                let targetOffset = round(scrollOffsets[index] / itemHeight) * itemHeight
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    scrollOffsets[index] = targetOffset
-                }
-
+                scrollOffsets[index] = targetOffset // 正確な位置に設定
                 isSpinning[index] = false
                 isStopping[index] = false
             }
         }
 
-        // 元のタイマーを停止
-        spinTimers[index]?.invalidate()
         spinTimers[index] = decelerationTimer
     }
 
