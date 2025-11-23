@@ -296,16 +296,17 @@ struct ContentView: View {
     }
 
     // 3つの数字がストレート（連続）かどうか判定
+    // 左から右へ昇順、または右から左へ降順（逆順）のみ
     private func isStraight(_ numbers: [Int]) -> Bool {
-        let sorted = numbers.sorted()
+        guard numbers.count == 3 else { return false }
 
-        // 通常の連続: 1,2,3 / 2,3,4 / 3,4,5 / 4,5,6
-        if sorted[1] - sorted[0] == 1 && sorted[2] - sorted[1] == 1 {
+        // 昇順: 1,2,3 / 2,3,4 / 3,4,5 / 4,5,6
+        if numbers[1] - numbers[0] == 1 && numbers[2] - numbers[1] == 1 {
             return true
         }
 
-        // 循環連続: 5,6,1 → [1,5,6] / 6,1,2 → [1,2,6]
-        if sorted == [1, 5, 6] || sorted == [1, 2, 6] {
+        // 降順: 6,5,4 / 5,4,3 / 4,3,2 / 3,2,1
+        if numbers[0] - numbers[1] == 1 && numbers[1] - numbers[2] == 1 {
             return true
         }
 
@@ -313,32 +314,22 @@ struct ContentView: View {
     }
 
     // 2つの数字から連続が成立する可能性があるか判定
+    // 最初の2つ（左と中央）が連続していれば、3つ目で連続になる可能性あり
     private func canFormStraight(_ numbers: [Int]) -> Bool {
-        let a = numbers[0]
-        let b = numbers[1]
-        let diff = abs(a - b)
+        guard numbers.count == 2 else { return false }
 
-        // 差が1または2なら、間に入る数字で連続になる可能性がある
-        // 例: 2,4 → 3を入れれば 2,3,4
-        // 例: 3,4 → 2か5を入れれば 2,3,4 or 3,4,5
-        if diff == 1 || diff == 2 {
+        let first = numbers[0]
+        let second = numbers[1]
+
+        // 昇順の可能性: first, second, ? で連続になる場合
+        // first+1 == second なら、second+1 が来れば昇順連続
+        if second - first == 1 && second + 1 <= 6 {
             return true
         }
 
-        // 循環を考慮: 1と5, 1と6, 2と6 なども連続の可能性あり
-        let minNum = min(a, b)
-        let maxNum = max(a, b)
-
-        // 5,6 → 1で 5,6,1
-        // 6,1 → 2で 6,1,2 または 5で 5,6,1
-        // 1,2 → 6で 6,1,2
-        // 1,5 → 6で 5,6,1
-        // 2,6 → 1で 6,1,2
-        if (minNum == 5 && maxNum == 6) ||
-           (minNum == 1 && maxNum == 6) ||
-           (minNum == 1 && maxNum == 2) ||
-           (minNum == 1 && maxNum == 5) ||
-           (minNum == 2 && maxNum == 6) {
+        // 降順の可能性: first, second, ? で連続になる場合
+        // first-1 == second なら、second-1 が来れば降順連続
+        if first - second == 1 && second - 1 >= 1 {
             return true
         }
 
