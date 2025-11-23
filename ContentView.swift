@@ -1,74 +1,99 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var currentNumber: Int = 1
-    @State private var history: [Int] = []
-    @State private var isSpinning = false
-    @State private var isStopping = false
-    @State private var spinTimer: Timer?
+    // 3つのダイスの状態
+    @State private var diceNumbers: [Int] = [1, 1, 1]
+    @State private var isSpinning: [Bool] = [false, false, false]
+    @State private var isStopping: [Bool] = [false, false, false]
+    @State private var spinTimers: [Timer?] = [nil, nil, nil]
     @State private var hasStarted = false
 
     var body: some View {
         VStack {
             Spacer()
 
-            // 履歴（上ほど薄い）
-            VStack(spacing: 8) {
-                ForEach(Array(history.enumerated()), id: \.offset) { index, number in
-                    Text("\(number)")
-                        .font(.system(size: 32, weight: .bold))
-                        .opacity(historyOpacity(for: index))
+            // 3つのダイスを横に並べる
+            HStack(spacing: 20) {
+                ForEach(0..<3, id: \.self) { index in
+                    VStack {
+                        // スロットマシン風の数字表示
+                        if hasStarted {
+                            slotView(for: index)
+                        } else {
+                            // 開始前のプレースホルダー
+                            VStack(spacing: 4) {
+                                Text("-")
+                                    .font(.system(size: 28, weight: .medium))
+                                    .opacity(0.2)
+                                Text("-")
+                                    .font(.system(size: 36, weight: .medium))
+                                    .opacity(0.4)
+                                Text("-")
+                                    .font(.system(size: 56, weight: .bold))
+                                Text("-")
+                                    .font(.system(size: 36, weight: .medium))
+                                    .opacity(0.4)
+                                Text("-")
+                                    .font(.system(size: 28, weight: .medium))
+                                    .opacity(0.2)
+                            }
+                            .frame(width: 80, height: 220)
+                        }
+
+                        // 各ダイスのストップボタン
+                        Button("ストップ") {
+                            stopDice(index)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!isSpinning[index] || isStopping[index])
+                    }
                 }
-            }
-            .padding(.bottom, 20)
-
-            // スロットマシン風の数字表示
-            if hasStarted {
-                VStack(spacing: 4) {
-                    // 上2つ目
-                    Text("\(wrapNumber(currentNumber - 2))")
-                        .font(.system(size: 36, weight: .medium))
-                        .opacity(0.2)
-
-                    // 上1つ目
-                    Text("\(wrapNumber(currentNumber - 1))")
-                        .font(.system(size: 48, weight: .medium))
-                        .opacity(0.4)
-
-                    // 中央（現在の数字）
-                    Text("\(currentNumber)")
-                        .font(.system(size: 80, weight: .bold))
-                        .foregroundStyle(.primary)
-
-                    // 下1つ目
-                    Text("\(wrapNumber(currentNumber + 1))")
-                        .font(.system(size: 48, weight: .medium))
-                        .opacity(0.4)
-
-                    // 下2つ目
-                    Text("\(wrapNumber(currentNumber + 2))")
-                        .font(.system(size: 36, weight: .medium))
-                        .opacity(0.2)
-                }
-                .frame(height: 280)
-                .clipped()
             }
 
             Spacer()
 
-            // ダイスを振るボタン（画面下部）
-            Button(isSpinning ? "ストップ" : "ダイスを振る") {
-                if isSpinning {
-                    stopSpinning()
-                } else {
-                    startSpinning()
-                }
+            // スタートボタン（画面下部）
+            Button("スタート") {
+                startAllDice()
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .padding(.bottom, 40)
-            .disabled(isStopping)
+            .disabled(isSpinning.contains(true))
         }
+    }
+
+    // スロットマシン風の表示
+    @ViewBuilder
+    private func slotView(for index: Int) -> some View {
+        let number = diceNumbers[index]
+        VStack(spacing: 4) {
+            // 上2つ目
+            Text("\(wrapNumber(number - 2))")
+                .font(.system(size: 28, weight: .medium))
+                .opacity(0.2)
+
+            // 上1つ目
+            Text("\(wrapNumber(number - 1))")
+                .font(.system(size: 36, weight: .medium))
+                .opacity(0.4)
+
+            // 中央（現在の数字）
+            Text("\(number)")
+                .font(.system(size: 56, weight: .bold))
+                .foregroundStyle(.primary)
+
+            // 下1つ目
+            Text("\(wrapNumber(number + 1))")
+                .font(.system(size: 36, weight: .medium))
+                .opacity(0.4)
+
+            // 下2つ目
+            Text("\(wrapNumber(number + 2))")
+                .font(.system(size: 28, weight: .medium))
+                .opacity(0.2)
+        }
+        .frame(width: 80, height: 220)
     }
 
     // 1-6で循環させる
@@ -80,28 +105,25 @@ struct ContentView: View {
         return result
     }
 
-    private func startSpinning() {
-        // 前回の結果を履歴に追加
-        if hasStarted {
-            history.append(currentNumber)
-            if history.count > 4 {
-                history.removeFirst()
-            }
-        }
-
+    // 全ダイスを回転開始
+    private func startAllDice() {
         hasStarted = true
-        isSpinning = true
-        currentNumber = Int.random(in: 1...6)
 
-        // 高速で数字を変更
-        spinTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { _ in
-            currentNumber = Int.random(in: 1...6)
+        for i in 0..<3 {
+            isSpinning[i] = true
+            diceNumbers[i] = Int.random(in: 1...6)
+
+            // 高速で数字を変更
+            spinTimers[i] = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { _ in
+                diceNumbers[i] = Int.random(in: 1...6)
+            }
         }
     }
 
-    private func stopSpinning() {
-        isStopping = true
-        spinTimer?.invalidate()
+    // 個別のダイスを停止
+    private func stopDice(_ index: Int) {
+        isStopping[index] = true
+        spinTimers[index]?.invalidate()
 
         // 徐々に遅くなりながら停止
         let delays: [Double] = [0.1, 0.15, 0.2, 0.3, 0.4, 0.5]
@@ -110,22 +132,15 @@ struct ContentView: View {
         for delay in delays {
             totalDelay += delay
             DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay) {
-                currentNumber = Int.random(in: 1...6)
+                diceNumbers[index] = Int.random(in: 1...6)
             }
         }
 
         // 最終停止
         DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay + 0.3) {
-            isSpinning = false
-            isStopping = false
+            isSpinning[index] = false
+            isStopping[index] = false
         }
-    }
-
-    private func historyOpacity(for index: Int) -> Double {
-        let count = history.count
-        guard count > 0 else { return 1.0 }
-        let ratio = Double(index + 1) / Double(count)
-        return 0.2 + (ratio * 0.5)
     }
 }
 
