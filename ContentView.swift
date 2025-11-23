@@ -67,39 +67,6 @@ struct ContentView: View {
             VStack {
                 Spacer()
 
-                // ゾロ目メッセージ
-                if isJackpot {
-                    VStack(spacing: 8) {
-                        if winningLineCount >= 3 {
-                            Text("🌟 SUPER JACKPOT! 🌟")
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundStyle(.purple)
-                        } else if winningLineCount == 2 {
-                            Text("✨ BIG JACKPOT! ✨")
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundStyle(.red)
-                        } else {
-                            Text("🎉 JACKPOT! 🎉")
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundStyle(.orange)
-                        }
-                        Text("\(winningLineCount)ライン当たり!")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .scaleEffect(jackpotScale)
-                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: jackpotScale)
-                    .padding(.bottom, 20)
-                }
-
-                // リーチメッセージ
-                if isReach && !isJackpot {
-                    Text("🔥 REACH! 🔥")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundStyle(.red)
-                        .padding(.bottom, 20)
-                }
-
                 // 3つのダイスを横に並べる
                 ZStack {
                     HStack(spacing: 20) {
@@ -125,6 +92,45 @@ struct ContentView: View {
                             }
                         }
                     }
+
+                    // ジャックポット/リーチメッセージ（スロットの上に重ねて表示）
+                    VStack {
+                        // ゾロ目メッセージ
+                        if isJackpot {
+                            VStack(spacing: 8) {
+                                if winningLineCount >= 3 {
+                                    Text("🌟 SUPER JACKPOT! 🌟")
+                                        .font(.system(size: 36, weight: .bold))
+                                        .foregroundStyle(.purple)
+                                } else if winningLineCount == 2 {
+                                    Text("✨ BIG JACKPOT! ✨")
+                                        .font(.system(size: 36, weight: .bold))
+                                        .foregroundStyle(.red)
+                                } else {
+                                    Text("🎉 JACKPOT! 🎉")
+                                        .font(.system(size: 36, weight: .bold))
+                                        .foregroundStyle(.orange)
+                                }
+                                Text("\(winningLineCount)ライン当たり!")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .scaleEffect(jackpotScale)
+                            .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: jackpotScale)
+                            .padding(12)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        }
+
+                        // リーチメッセージ
+                        if isReach && !isJackpot {
+                            Text("🔥 REACH! 🔥")
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundStyle(.red)
+                                .padding(12)
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        }
+                    }
+                    .offset(y: -180)  // スロットの上に配置
                 }
 
                 Spacer()
