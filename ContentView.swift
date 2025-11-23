@@ -435,8 +435,8 @@ struct ContentView: View {
         // 紙吹雪を生成
         startConfetti()
 
-        // 数秒後に演出を終了
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+        // 15秒後に演出を終了（スタートボタンで早期終了可能）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15.0) {
             withAnimation(.easeOut(duration: 0.5)) {
                 isJackpot = false
                 jackpotOpacity = 0
