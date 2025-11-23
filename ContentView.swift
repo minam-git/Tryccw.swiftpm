@@ -76,8 +76,7 @@ struct ContentView: View {
                                     // リーチ時のハイライト
                                     RoundedRectangle(cornerRadius: 12)
                                         .stroke(Color.red, lineWidth: 3)
-                                        .opacity(isReach && reachReelIndex == index ? 1 : 0)
-                                        .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isReach)
+                                        .opacity(isReach && reachReelIndex == index && isSpinning[index] ? 1 : 0)
                                 )
 
                             // 各ダイスのストップボタン
