@@ -36,6 +36,7 @@ struct ContentView: View {
     @State private var jackpotScale: CGFloat = 1.0
     @State private var jackpotOpacity: Double = 0.0
     @State private var winningLineCount: Int = 0  // 当たりライン数
+    @State private var winningLineIndices: [Int] = []  // 当たったライン番号
 
     private let itemHeight: CGFloat = 50
     private let visibleItems = 5
@@ -124,12 +125,6 @@ struct ContentView: View {
                             }
                         }
                     }
-
-                    // リーチ時のペイライン描画
-                    if isReach && !reachLineIndices.isEmpty {
-                        paylineOverlay()
-                            .allowsHitTesting(false)
-                    }
                 }
 
                 Spacer()
@@ -208,20 +203,20 @@ struct ContentView: View {
                     // この行のrowOffset（中央が0、上が-1、下が+1）
                     let rowOffset = i - centerOffset
 
-                    // リーチラインの一部ならハイライト
-                    let isReachCell = isPartOfReachLine(reelIndex: index, rowOffset: rowOffset)
+                    // リーチ/ジャックポットラインの一部ならハイライト
+                    let isHighlighted = isHighlightedCell(reelIndex: index, rowOffset: rowOffset)
 
                     ZStack {
-                        // リーチセルの背景
-                        if isReachCell {
+                        // ハイライトセルの背景
+                        if isHighlighted {
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.red.opacity(0.3))
+                                .fill(Color.orange.opacity(0.3))
                                 .frame(width: 70, height: itemHeight - 4)
                         }
 
                         Text("\(number)")
                             .font(.system(size: 44, weight: distanceFromCenter < itemHeight / 2 ? .bold : .medium))
-                            .foregroundStyle(isReachCell ? .red : .primary)
+                            .foregroundStyle(isHighlighted ? .orange : .primary)
                     }
                     .scaleEffect(scale)
                     .opacity(hasStarted ? opacity : 0.3)
@@ -257,6 +252,7 @@ struct ContentView: View {
         isReach = false
         reachReelIndex = nil
         reachLineIndices = []
+        winningLineIndices = []
         confettiPieces = []
         jackpotOpacity = 0
 
@@ -338,21 +334,22 @@ struct ContentView: View {
         // 全部停止した場合
         if stoppedIndices.count == 3 {
             // 各ラインをチェックして当たりライン数をカウント
-            var winCount = 0
-            for line in paylines {
+            var winLines: [Int] = []
+            for (index, line) in paylines.enumerated() {
                 let numbers = getLineNumbers(line)
                 // ゾロ目判定
                 if numbers[0] == numbers[1] && numbers[1] == numbers[2] {
-                    winCount += 1
+                    winLines.append(index)
                 }
                 // ストレート（連続）判定
                 else if isStraight(numbers) {
-                    winCount += 1
+                    winLines.append(index)
                 }
             }
 
-            if winCount > 0 {
-                winningLineCount = winCount
+            if !winLines.isEmpty {
+                winningLineCount = winLines.count
+                winningLineIndices = winLines
                 triggerJackpot()
             }
 
@@ -534,58 +531,32 @@ struct ContentView: View {
         ]
     }
 
-    // 指定した(リール, 行オフセット)がリーチラインの一部かどうか
-    private func isPartOfReachLine(reelIndex: Int, rowOffset: Int) -> Bool {
-        guard isReach && !isSpinning[reelIndex] else { return false }
-        for lineIndex in reachLineIndices {
-            let line = paylines[lineIndex]
-            let offsets = [line.0, line.1, line.2]
-            if offsets[reelIndex] == rowOffset {
-                return true
-            }
-        }
-        return false
-    }
-
-    // ペイラインの色
-    private func colorForPayline(_ index: Int) -> Color {
-        let colors: [Color] = [.red, .blue, .green, .orange, .purple]
-        return colors[index % colors.count]
-    }
-
-    // ペイライン描画オーバーレイ
-    @ViewBuilder
-    private func paylineOverlay() -> some View {
-        let reelWidth: CGFloat = 80
-        let spacing: CGFloat = 20
-        let reelHeight = CGFloat(visibleItems) * itemHeight
-        let totalWidth = 3 * reelWidth + 2 * spacing
-
-        Canvas { context, size in
+    // 指定した(リール, 行オフセット)がハイライト対象かどうか
+    // リーチ中またはジャックポット中の当たりラインをハイライト
+    private func isHighlightedCell(reelIndex: Int, rowOffset: Int) -> Bool {
+        // リーチ中（停止済みリールのみ）
+        if isReach && !isSpinning[reelIndex] {
             for lineIndex in reachLineIndices {
                 let line = paylines[lineIndex]
                 let offsets = [line.0, line.1, line.2]
-                let color = colorForPayline(lineIndex)
-
-                var path = Path()
-                for reelIndex in 0..<3 {
-                    // 各リールの中心X座標
-                    let reelCenterX = CGFloat(reelIndex) * (reelWidth + spacing) + reelWidth / 2
-                    // 各行のY座標（中央が reelHeight/2）
-                    let rowOffset = offsets[reelIndex]
-                    let y = reelHeight / 2 + CGFloat(rowOffset) * itemHeight
-
-                    if reelIndex == 0 {
-                        path.move(to: CGPoint(x: reelCenterX, y: y))
-                    } else {
-                        path.addLine(to: CGPoint(x: reelCenterX, y: y))
-                    }
+                if offsets[reelIndex] == rowOffset {
+                    return true
                 }
-
-                context.stroke(path, with: .color(color), lineWidth: 3)
             }
         }
-        .frame(width: totalWidth, height: reelHeight)
+
+        // ジャックポット中（当たりライン）
+        if isJackpot {
+            for lineIndex in winningLineIndices {
+                let line = paylines[lineIndex]
+                let offsets = [line.0, line.1, line.2]
+                if offsets[reelIndex] == rowOffset {
+                    return true
+                }
+            }
+        }
+
+        return false
     }
 }
 
