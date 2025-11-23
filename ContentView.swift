@@ -490,8 +490,10 @@ struct ContentView: View {
     // rowOffset: -1=上段, 0=中段, 1=下段
     private func getNumber(reelIndex: Int, rowOffset: Int) -> Int {
         let sequence = reelSequences[reelIndex]
-        let baseIndex = Int(round(scrollOffsets[reelIndex] / itemHeight))
-        let seqIndex = wrapIndex(baseIndex + rowOffset, count: sequence.count)
+        let baseIndex = Int(scrollOffsets[reelIndex] / itemHeight)
+        // 表示の中央は i=2 の位置（5行表示で中央が3行目）
+        let centerOffset = (visibleItems - 1) / 2  // = 2
+        let seqIndex = wrapIndex(baseIndex + centerOffset + rowOffset, count: sequence.count)
         return sequence[seqIndex]
     }
 
