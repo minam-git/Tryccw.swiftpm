@@ -149,45 +149,35 @@ struct ContentView: View {
         spinTimers[index]?.invalidate()
 
         let currentOffset = scrollOffsets[index]
-        let currentSpeed = spinSpeeds[index]
+        let v0 = spinSpeeds[index] // 現在の速度
 
-        // 現在の速度から自然に減速して止まる距離を計算
-        // easeOutCubicの初期速度 = totalDistance / duration * 3
-        // よって duration = totalDistance * 3 / currentSpeed
-        // 適切な減速時間になるよう距離を調整
-        let duration: Double = 2.0
-        // 現在の速度で2秒間かけて自然に止まる距離
-        let naturalDistance = currentSpeed * CGFloat(duration) / 3.0
-
-        // その距離を最も近い数字の位置に合わせる（少なくとも1周は回る）
-        let minDistance = itemHeight * 6 // 最低1周
-        let adjustedDistance = max(naturalDistance, minDistance)
-        let rawTarget = currentOffset + adjustedDistance
+        // 目標位置を決定（現在位置から1〜2周先）
+        let extraItems = CGFloat(Int.random(in: 6...12))
+        let rawTarget = currentOffset + itemHeight * extraItems
         let targetOffset = round(rawTarget / itemHeight) * itemHeight
+        let totalDistance = targetOffset - currentOffset
 
-        // アニメーションのパラメータ
-        let startOffset = currentOffset
-        let totalDistance = targetOffset - startOffset
-        // 実際の距離に合わせてdurationを再計算（初期速度が現在速度と一致するように）
-        let adjustedDuration = Double(totalDistance) * 3.0 / Double(currentSpeed)
+        // 物理ベースの減速：等減速運動
+        // d = v0^2 / (2*a) → a = v0^2 / (2*d)
+        // 停止時間: t = v0 / a = 2*d / v0
+        let deceleration = (v0 * v0) / (2.0 * totalDistance)
+        let stopTime = v0 / deceleration
         let startTime = Date()
 
-        // easeOutで滑らかに減速しながら目標位置へ
+        // 等減速運動でアニメーション
         let decelerationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { timer in
-            let elapsed = Date().timeIntervalSince(startTime)
-            let progress = min(elapsed / adjustedDuration, 1.0)
+            let elapsed = CGFloat(Date().timeIntervalSince(startTime))
 
-            // easeOutCubic: 最初は速く、最後はゆっくり
-            let easedProgress = 1.0 - pow(1.0 - progress, 3)
-
-            scrollOffsets[index] = startOffset + totalDistance * easedProgress
-
-            // アニメーション完了
-            if progress >= 1.0 {
+            if elapsed >= stopTime {
+                // 完了
                 timer.invalidate()
-                scrollOffsets[index] = targetOffset // 正確な位置に設定
+                scrollOffsets[index] = targetOffset
                 isSpinning[index] = false
                 isStopping[index] = false
+            } else {
+                // 等減速運動: x = x0 + v0*t - 0.5*a*t^2
+                let position = currentOffset + v0 * elapsed - 0.5 * deceleration * elapsed * elapsed
+                scrollOffsets[index] = position
             }
         }
 
