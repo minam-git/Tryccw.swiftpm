@@ -34,11 +34,23 @@ struct ContentView: View {
     @State private var confettiPieces: [ConfettiPiece] = []
     @State private var jackpotScale: CGFloat = 1.0
     @State private var jackpotOpacity: Double = 0.0
+    @State private var winningLineCount: Int = 0  // 当たりライン数
 
     private let itemHeight: CGFloat = 50
     private let visibleItems = 5
     private let speedOptions: [Double] = [0.2, 0.4, 0.6, 0.8, 1.0]
     private let confettiColors: [Color] = [.red, .yellow, .green, .blue, .purple, .orange, .pink]
+
+    // 5つの判定ライン定義
+    // 各ラインは (リール0の行オフセット, リール1の行オフセット, リール2の行オフセット)
+    // 行オフセット: -1=上段(行2), 0=中段(行3), 1=下段(行4)
+    private let paylines: [(Int, Int, Int)] = [
+        (-1, -1, -1),  // ライン1: 横上段
+        (0, 0, 0),     // ライン2: 横中段
+        (1, 1, 1),     // ライン3: 横下段
+        (-1, 0, 1),    // ライン4: 斜め↘
+        (1, 0, -1)     // ライン5: 斜め↗
+    ]
 
     var body: some View {
         ZStack {
@@ -55,12 +67,27 @@ struct ContentView: View {
 
                 // ゾロ目メッセージ
                 if isJackpot {
-                    Text("🎉 JACKPOT! 🎉")
-                        .font(.system(size: 36, weight: .bold))
-                        .foregroundStyle(.orange)
-                        .scaleEffect(jackpotScale)
-                        .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: jackpotScale)
-                        .padding(.bottom, 20)
+                    VStack(spacing: 8) {
+                        if winningLineCount >= 3 {
+                            Text("🌟 SUPER JACKPOT! 🌟")
+                                .font(.system(size: 36, weight: .bold))
+                                .foregroundStyle(.purple)
+                        } else if winningLineCount == 2 {
+                            Text("✨ BIG JACKPOT! ✨")
+                                .font(.system(size: 36, weight: .bold))
+                                .foregroundStyle(.red)
+                        } else {
+                            Text("🎉 JACKPOT! 🎉")
+                                .font(.system(size: 36, weight: .bold))
+                                .foregroundStyle(.orange)
+                        }
+                        Text("\(winningLineCount)ライン当たり!")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .scaleEffect(jackpotScale)
+                    .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: jackpotScale)
+                    .padding(.bottom, 20)
                 }
 
                 // リーチメッセージ
@@ -276,41 +303,104 @@ struct ContentView: View {
         spinTimers[index] = decelerationTimer
     }
 
-    // リーチとゾロ目の判定
+    // リーチとゾロ目の判定（5ライン対応）
     private func checkReachAndJackpot() {
         let stoppedIndices = (0..<3).filter { !isSpinning[$0] }
         let spinningIndices = (0..<3).filter { isSpinning[$0] }
 
         // 全部停止した場合
         if stoppedIndices.count == 3 {
-            // リールの位置順（左から右: 0, 1, 2）で数字を取得
-            let orderedNumbers = [currentNumber(for: 0), currentNumber(for: 1), currentNumber(for: 2)]
+            // 各ラインをチェックして当たりライン数をカウント
+            var winCount = 0
+            for line in paylines {
+                let numbers = getLineNumbers(line)
+                // ゾロ目判定
+                if numbers[0] == numbers[1] && numbers[1] == numbers[2] {
+                    winCount += 1
+                }
+                // ストレート（連続）判定
+                else if isStraight(numbers) {
+                    winCount += 1
+                }
+            }
 
-            // ゾロ目判定
-            if orderedNumbers[0] == orderedNumbers[1] && orderedNumbers[1] == orderedNumbers[2] {
+            if winCount > 0 {
+                winningLineCount = winCount
                 triggerJackpot()
             }
-            // ストレート（連続）判定
-            else if isStraight(orderedNumbers) {
-                triggerJackpot()
-            }
+
             isReach = false
             reachReelIndex = nil
         }
         // 2つ停止した場合
         else if stoppedIndices.count == 2 && spinningIndices.count == 1 {
-            // 停止したリールを位置順（左から右）にソート
-            let sortedStoppedIndices = stoppedIndices.sorted()
-            let orderedStoppedNumbers = sortedStoppedIndices.map { currentNumber(for: $0) }
+            // いずれかのラインでリーチの可能性があるかチェック
+            var hasReachPotential = false
+            for line in paylines {
+                if checkLineReach(line, stoppedIndices: stoppedIndices) {
+                    hasReachPotential = true
+                    break
+                }
+            }
 
-            // リーチ判定（2つが同じ数字、または連続の可能性がある）
-            if orderedStoppedNumbers[0] == orderedStoppedNumbers[1] || canFormStraight(sortedStoppedIndices, orderedStoppedNumbers) {
+            if hasReachPotential {
                 isReach = true
                 reachReelIndex = spinningIndices[0]
-                // 残りのリールを減速
                 slowDownReachReel(spinningIndices[0])
             }
         }
+    }
+
+    // 特定のラインでリーチの可能性があるかチェック
+    private func checkLineReach(_ line: (Int, Int, Int), stoppedIndices: [Int]) -> Bool {
+        let offsets = [line.0, line.1, line.2]
+
+        // 停止したリールの数字を取得
+        var stoppedNumbers: [Int] = []
+        var spinningReelIndex: Int = -1
+
+        for reelIndex in 0..<3 {
+            if stoppedIndices.contains(reelIndex) {
+                stoppedNumbers.append(getNumber(reelIndex: reelIndex, rowOffset: offsets[reelIndex]))
+            } else {
+                spinningReelIndex = reelIndex
+            }
+        }
+
+        guard stoppedNumbers.count == 2 else { return false }
+
+        // 2つが同じならリーチ
+        if stoppedNumbers[0] == stoppedNumbers[1] {
+            return true
+        }
+
+        // 連続の可能性チェック
+        let sortedStoppedIndices = stoppedIndices.sorted()
+        return canFormStraightForLine(sortedStoppedIndices, stoppedNumbers, offsets: offsets)
+    }
+
+    // ライン別の連続リーチ判定
+    private func canFormStraightForLine(_ indices: [Int], _ numbers: [Int], offsets: [Int]) -> Bool {
+        guard indices.count == 2 && numbers.count == 2 else { return false }
+
+        let first = numbers[0]
+        let second = numbers[1]
+
+        // 停止しているリールの位置パターンで判定
+        if indices == [0, 1] {
+            if second - first == 1 && second + 1 <= 6 { return true }
+            if first - second == 1 && second - 1 >= 1 { return true }
+        }
+        else if indices == [0, 2] {
+            if second - first == 2 { return true }
+            if first - second == 2 { return true }
+        }
+        else if indices == [1, 2] {
+            if second - first == 1 && first - 1 >= 1 { return true }
+            if first - second == 1 && first + 1 <= 6 { return true }
+        }
+
+        return false
     }
 
     // 3つの数字がストレート（連続）かどうか判定
@@ -326,40 +416,6 @@ struct ContentView: View {
         // 降順: 6,5,4 / 5,4,3 / 4,3,2 / 3,2,1
         if numbers[0] - numbers[1] == 1 && numbers[1] - numbers[2] == 1 {
             return true
-        }
-
-        return false
-    }
-
-    // 2つの数字から連続が成立する可能性があるか判定
-    // indices: 停止したリールの位置（ソート済み）、numbers: その数字
-    private func canFormStraight(_ indices: [Int], _ numbers: [Int]) -> Bool {
-        guard indices.count == 2 && numbers.count == 2 else { return false }
-
-        let first = numbers[0]  // 左側のリールの数字
-        let second = numbers[1] // 右側のリールの数字
-
-        // 停止しているリールの位置パターンで判定
-        if indices == [0, 1] {
-            // 位置0,1が停止 → 位置2に来る数字で連続になるか
-            // 昇順: first, second, ? → second+1 が来れば連続
-            if second - first == 1 && second + 1 <= 6 { return true }
-            // 降順: first, second, ? → second-1 が来れば連続
-            if first - second == 1 && second - 1 >= 1 { return true }
-        }
-        else if indices == [0, 2] {
-            // 位置0,2が停止 → 位置1に来る数字で連続になるか
-            // 昇順: first, ?, second → first+1 == second-1 なら連続可能
-            if second - first == 2 { return true }
-            // 降順: first, ?, second → first-1 == second+1 なら連続可能
-            if first - second == 2 { return true }
-        }
-        else if indices == [1, 2] {
-            // 位置1,2が停止 → 位置0に来る数字で連続になるか
-            // 昇順: ?, first, second → first-1 が来れば連続
-            if second - first == 1 && first - 1 >= 1 { return true }
-            // 降順: ?, first, second → first+1 が来れば連続
-            if first - second == 1 && first + 1 <= 6 { return true }
         }
 
         return false
@@ -425,11 +481,27 @@ struct ContentView: View {
         }
     }
 
-    // 現在の数字を取得
+    // 現在の数字を取得（中央行）
     private func currentNumber(for index: Int) -> Int {
-        let sequence = reelSequences[index]
-        let seqIndex = wrapIndex(Int(round(scrollOffsets[index] / itemHeight)), count: sequence.count)
+        return getNumber(reelIndex: index, rowOffset: 0)
+    }
+
+    // 指定した行オフセットの数字を取得
+    // rowOffset: -1=上段, 0=中段, 1=下段
+    private func getNumber(reelIndex: Int, rowOffset: Int) -> Int {
+        let sequence = reelSequences[reelIndex]
+        let baseIndex = Int(round(scrollOffsets[reelIndex] / itemHeight))
+        let seqIndex = wrapIndex(baseIndex + rowOffset, count: sequence.count)
         return sequence[seqIndex]
+    }
+
+    // 指定したラインの3つの数字を取得
+    private func getLineNumbers(_ line: (Int, Int, Int)) -> [Int] {
+        return [
+            getNumber(reelIndex: 0, rowOffset: line.0),
+            getNumber(reelIndex: 1, rowOffset: line.1),
+            getNumber(reelIndex: 2, rowOffset: line.2)
+        ]
     }
 }
 
