@@ -148,22 +148,34 @@ struct ContentView: View {
         isStopping[index] = true
         spinTimers[index]?.invalidate()
 
-        // 現在位置から目標位置を決定（1〜2周分先の位置）
         let currentOffset = scrollOffsets[index]
-        let extraDistance = itemHeight * CGFloat(Int.random(in: 8...14)) // 追加で回る距離
-        let rawTarget = currentOffset + extraDistance
-        let targetOffset = round(rawTarget / itemHeight) * itemHeight // 数字の位置に合わせる
+        let currentSpeed = spinSpeeds[index]
+
+        // 現在の速度から自然に減速して止まる距離を計算
+        // easeOutCubicの初期速度 = totalDistance / duration * 3
+        // よって duration = totalDistance * 3 / currentSpeed
+        // 適切な減速時間になるよう距離を調整
+        let duration: Double = 2.0
+        // 現在の速度で2秒間かけて自然に止まる距離
+        let naturalDistance = currentSpeed * CGFloat(duration) / 3.0
+
+        // その距離を最も近い数字の位置に合わせる（少なくとも1周は回る）
+        let minDistance = itemHeight * 6 // 最低1周
+        let adjustedDistance = max(naturalDistance, minDistance)
+        let rawTarget = currentOffset + adjustedDistance
+        let targetOffset = round(rawTarget / itemHeight) * itemHeight
 
         // アニメーションのパラメータ
         let startOffset = currentOffset
         let totalDistance = targetOffset - startOffset
-        let duration: Double = 2.0 // 停止までの時間（秒）
+        // 実際の距離に合わせてdurationを再計算（初期速度が現在速度と一致するように）
+        let adjustedDuration = Double(totalDistance) * 3.0 / Double(currentSpeed)
         let startTime = Date()
 
         // easeOutで滑らかに減速しながら目標位置へ
         let decelerationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { timer in
             let elapsed = Date().timeIntervalSince(startTime)
-            let progress = min(elapsed / duration, 1.0)
+            let progress = min(elapsed / adjustedDuration, 1.0)
 
             // easeOutCubic: 最初は速く、最後はゆっくり
             let easedProgress = 1.0 - pow(1.0 - progress, 3)
