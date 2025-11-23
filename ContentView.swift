@@ -20,6 +20,13 @@ struct ContentView: View {
     @State private var spinSpeeds: [CGFloat] = [0, 0, 0]
     @State private var speedMultiplier: Double = 1.0
 
+    // 各リールのランダムな数字の並び
+    @State private var reelSequences: [[Int]] = [
+        [1, 2, 3, 4, 5, 6].shuffled(),
+        [1, 2, 3, 4, 5, 6].shuffled(),
+        [1, 2, 3, 4, 5, 6].shuffled()
+    ]
+
     // 演出用の状態
     @State private var isJackpot = false
     @State private var isReach = false
@@ -142,6 +149,7 @@ struct ContentView: View {
     @ViewBuilder
     private func slotReelView(for index: Int) -> some View {
         let offset = scrollOffsets[index]
+        let sequence = reelSequences[index]
 
         GeometryReader { geometry in
             let centerY = geometry.size.height / 2
@@ -149,7 +157,8 @@ struct ContentView: View {
             ZStack {
                 // 十分な数の数字を表示（上下にバッファ）
                 ForEach(-10..<10, id: \.self) { i in
-                    let number = wrapNumber(Int(offset / itemHeight) + i + 1)
+                    let seqIndex = wrapIndex(Int(offset / itemHeight) + i, count: sequence.count)
+                    let number = sequence[seqIndex]
                     let baseY = CGFloat(i) * itemHeight - offset.truncatingRemainder(dividingBy: itemHeight)
                     let itemCenterY = baseY + itemHeight / 2
                     let distanceFromCenter = abs(itemCenterY - centerY)
@@ -179,11 +188,11 @@ struct ContentView: View {
         )
     }
 
-    // 1-6で循環させる
-    private func wrapNumber(_ n: Int) -> Int {
-        var result = n % 6
-        if result <= 0 {
-            result += 6
+    // インデックスを循環させる
+    private func wrapIndex(_ n: Int, count: Int) -> Int {
+        var result = n % count
+        if result < 0 {
+            result += count
         }
         return result
     }
@@ -196,6 +205,11 @@ struct ContentView: View {
         reachReelIndex = nil
         confettiPieces = []
         jackpotOpacity = 0
+
+        // 各リールのシーケンスをシャッフル
+        for i in 0..<3 {
+            reelSequences[i] = [1, 2, 3, 4, 5, 6].shuffled()
+        }
 
         for i in 0..<3 {
             isSpinning[i] = true
@@ -413,7 +427,9 @@ struct ContentView: View {
 
     // 現在の数字を取得
     private func currentNumber(for index: Int) -> Int {
-        return wrapNumber(Int(round(scrollOffsets[index] / itemHeight)) + 1)
+        let sequence = reelSequences[index]
+        let seqIndex = wrapIndex(Int(round(scrollOffsets[index] / itemHeight)), count: sequence.count)
+        return sequence[seqIndex]
     }
 }
 
