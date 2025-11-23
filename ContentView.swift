@@ -152,8 +152,12 @@ struct ContentView: View {
         // spinSpeedsはフレームあたりのピクセル数なので、秒あたりに変換（60fps）
         let v0 = spinSpeeds[index] * 60.0 // ピクセル/秒
 
-        // 目標位置を決定（現在位置から1〜2周先）
-        let extraItems = CGFloat(Int.random(in: 6...12))
+        // 速度に応じた停止時間調整係数（100%→1.6倍、20%→0.7倍）
+        let timeFactor = 0.7 + (speedMultiplier - 0.2) / 0.8 * 0.9
+
+        // 目標位置を決定（現在位置から1〜2周先、時間調整係数を適用）
+        let baseExtraItems = CGFloat(Int.random(in: 6...12))
+        let extraItems = baseExtraItems * timeFactor
         let rawTarget = currentOffset + itemHeight * extraItems
         let targetOffset = round(rawTarget / itemHeight) * itemHeight
         let totalDistance = targetOffset - currentOffset
